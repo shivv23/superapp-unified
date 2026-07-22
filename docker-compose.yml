@@ -1,0 +1,160 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-service
+      - portfolio-service
+      - marketplace-service
+      - advisory-service
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - PORTFOLIO_SERVICE_URL=http://portfolio-service:8002
+      - MARKETPLACE_SERVICE_URL=http://marketplace-service:8003
+      - ADVISORY_SERVICE_URL=http://advisory-service:8004
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - superapp-network
+
+  auth-service:
+    build:
+      context: ./services/auth
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=superapp
+      - DB_PASSWORD=superapp_secret
+      - DB_NAME=superapp_auth
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-jwt-secret-change-in-production
+      - PORT=8001
+    networks:
+      - superapp-network
+
+  portfolio-service:
+    build:
+      context: ./services/portfolio
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=superapp
+      - DB_PASSWORD=superapp_secret
+      - DB_NAME=superapp_portfolio
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=kafka:9092
+      - PORT=8002
+    networks:
+      - superapp-network
+
+  marketplace-service:
+    build:
+      context: ./services/marketplace
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=superapp
+      - DB_PASSWORD=superapp_secret
+      - DB_NAME=superapp_marketplace
+      - REDIS_URL=redis://redis:6379
+      - PORT=8003
+    networks:
+      - superapp-network
+
+  advisory-service:
+    build:
+      context: ./services/advisory
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8004"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=superapp
+      - DB_PASSWORD=superapp_secret
+      - DB_NAME=superapp_advisory
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=your-openai-api-key
+      - PORT=8004
+    networks:
+      - superapp-network
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=superapp
+      - POSTGRES_PASSWORD=superapp_secret
+      - POSTGRES_DB=superapp_auth
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - superapp-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - superapp-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - superapp-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - superapp-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  superapp-network:
+    driver: bridge

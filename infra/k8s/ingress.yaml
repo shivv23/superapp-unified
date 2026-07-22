@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: superapp-ingress
+  namespace: superapp
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - superapp.example.com
+      secretName: superapp-tls
+  rules:
+    - host: superapp.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+          - path: /api/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-service
+                port:
+                  number: 8001
+          - path: /api/portfolio
+            pathType: Prefix
+            backend:
+              service:
+                name: portfolio-service
+                port:
+                  number: 8002
+          - path: /api/marketplace
+            pathType: Prefix
+            backend:
+              service:
+                name: marketplace-service
+                port:
+                  number: 8003
+          - path: /api/advisory
+            pathType: Prefix
+            backend:
+              service:
+                name: advisory-service
+                port:
+                  number: 8004

@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: advisory-service
+  namespace: superapp
+  labels:
+    app: advisory-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: advisory-service
+  template:
+    metadata:
+      labels:
+        app: advisory-service
+    spec:
+      containers:
+        - name: advisory-service
+          image: superapp/advisory-service:latest
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef:
+                name: superapp-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8004
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: advisory-service
+  namespace: superapp
+spec:
+  selector:
+    app: advisory-service
+  ports:
+    - protocol: TCP
+      port: 8004
+      targetPort: 8004
+  type: ClusterIP
