@@ -1,95 +1,150 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { formatPercent } from "@/lib/utils";
+import { apiGetHealthScore, type PortfolioHealth } from "@/lib/api";
+import { formatCurrency, formatPercent } from "@/lib/utils";
 import {
-  Activity,
   AlertTriangle,
-  BarChart3,
   Brain,
   CheckCircle2,
   ChevronRight,
+  Loader2,
   RefreshCw,
   Shield,
   Star,
   Target,
   TrendingUp,
   Zap,
+  AlertCircle,
+  Info,
 } from "lucide-react";
 
 const fadeIn = { initial: { opacity: 0, y: 20 }, animate: { opacity: 1, y: 0 } };
 const stagger = { animate: { transition: { staggerChildren: 0.06 } } };
 
-const healthScore = 72;
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  Returns: TrendingUp,
+  "Risk Management": Shield,
+  Diversification: Target,
+  "Tax Efficiency": Zap,
+};
 
-const scoreBreakdown = [
-  { label: "Returns Score", score: 78, color: "blue" as const, description: "Your returns outperform 65% of similar portfolios", icon: TrendingUp },
-  { label: "Risk Management", score: 65, color: "gold" as const, description: "Moderate risk with room to optimize", icon: Shield },
-  { label: "Diversification", score: 82, color: "green" as const, description: "Well spread across 6 asset classes", icon: Target },
-  { label: "Tax Efficiency", score: 63, color: "purple" as const, description: "Consider harvesting losses before FY end", icon: Zap },
-];
+const CATEGORY_COLORS: Record<string, string> = {
+  Returns: "blue",
+  "Risk Management": "gold",
+  Diversification: "green",
+  "Tax Efficiency": "purple",
+};
 
-const issues = [
-  { text: "High concentration in Indian equity (59.6%) — Consider international diversification", severity: "high" as const },
-  { text: "3 holdings overlap significantly in tech sector (TCS + INFY + HDFCBANK tech exposure)", severity: "medium" as const },
-  { text: "Expense ratio drag: Average 0.42% across MF holdings — Switch to direct plans", severity: "medium" as const },
-  { text: "No emergency fund allocation visible — Maintain 6 months expenses in liquid funds", severity: "high" as const },
-  { text: "Gold allocation (20.9%) above recommended 10–15% for your risk profile", severity: "low" as const },
-];
+const SEVERITY_ICON: Record<string, React.ElementType> = {
+  critical: AlertCircle,
+  warning: AlertTriangle,
+  info: Info,
+};
 
-const recommendations = [
-  { text: "Add international exposure via Motilal Oswal S&P 500 ETF (3–5% of portfolio)", tag: "Diversification", tagVariant: "info" as const },
-  { text: "Switch regular MF plans to direct plans to save 0.5–1% annually", tag: "Cost Saving", tagVariant: "success" as const },
-  { text: "Book ₹32,800 in tax losses before March 31 to offset LTCG", tag: "Tax", tagVariant: "warning" as const },
-  { text: "Consider increasing debt allocation to 25% as you approach 40", tag: "Rebalancing", tagVariant: "gold" as const },
-];
+const SEVERITY_COLOR: Record<string, string> = {
+  critical: "text-red-500",
+  warning: "text-amber-500",
+  info: "text-blue-400",
+};
 
-const monthlyScores = [
-  { month: "Jul", score: 65 },
-  { month: "Aug", score: 67 },
-  { month: "Sep", score: 68 },
-  { month: "Oct", score: 70 },
-  { month: "Nov", score: 69 },
-  { month: "Dec", score: 71 },
-  { month: "Jan", score: 70 },
-  { month: "Feb", score: 72 },
-  { month: "Mar", score: 71 },
-  { month: "Apr", score: 73 },
-  { month: "May", score: 72 },
-  { month: "Jun", score: 74 },
-  { month: "Jul", score: 72 },
-];
-
-const overlaps = [
-  { funds: "TCS + Infosys", overlap: 42, description: "technology overlap" },
-  { funds: "HDFC Flexi Cap + Parag Parikh Flexi Cap", overlap: 28, description: "overlap in top holdings" },
-];
+const PRIORITY_VARIANT: Record<string, string> = {
+  High: "danger",
+  Medium: "warning",
+  Low: "info",
+};
 
 function getScoreColor(score: number) {
-  if (score >= 80) return "text-green-500";
-  if (score >= 60) return "text-gold-400";
+  if (score >= 70) return "text-green-500";
+  if (score >= 40) return "text-gold-400";
   return "text-red-500";
 }
 
-function getScoreLabel(score: number) {
-  if (score >= 80) return "Excellent";
-  if (score >= 60) return "Good";
-  if (score >= 40) return "Fair";
-  return "Poor";
+function getGaugeColor(score: number) {
+  if (score >= 70) return "green";
+  if (score >= 40) return "gold";
+  return "red";
+}
+
+function getCategoryBadgeVariant(color: string): string {
+  switch (color) {
+    case "blue": return "info";
+    case "green": return "success";
+    case "gold": return "warning";
+    case "purple": return "default";
+    default: return "default";
+  }
 }
 
 export default function AnalyticsPage() {
+  const [health, setHealth] = useState<PortfolioHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = async () => {
+    try {
+      setError(null);
+      const res = await apiGetHealthScore();
+      if (res.status === "success") {
+        setHealth(res.data);
+      } else {
+        setError("Failed to load portfolio health data");
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to load portfolio health data");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 2000);
+    setLoading(true);
+    fetchData();
   };
+
+  if (loading && !health) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-muted-foreground text-sm">Analyzing your portfolio...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (error && !health) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <AlertCircle className="h-10 w-10 text-red-500" />
+          <p className="text-muted-foreground text-sm">{error}</p>
+          <Button variant="outline" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!health) return null;
+
+  const gaugeRotation = (health.overall_score / 100) * 180 - 90;
+  const gaugeColor = getGaugeColor(health.overall_score);
+  const gaugeGradientId = `gauge-${gaugeColor}`;
 
   return (
     <DashboardLayout>
@@ -118,40 +173,69 @@ export default function AnalyticsPage() {
                     </linearGradient>
                   </defs>
                   <path d="M 5 45 A 45 45 0 0 1 95 45" fill="none" stroke="url(#healthGrad)" strokeWidth="8" strokeLinecap="round" opacity="0.2" />
-                  <path d="M 5 45 A 45 45 0 0 1 95 45" fill="none" stroke="url(#healthGrad)" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${healthScore * 1.41} 141`} />
-                  <circle cx="50" cy="45" r="3" fill="white" transform={`rotate(${(healthScore / 100) * 180 - 90} 50 45)`} style={{ transformOrigin: "50px 45px" }} />
+                  <path d="M 5 45 A 45 45 0 0 1 95 45" fill="none" stroke="url(#healthGrad)" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${health.overall_score * 1.41} 141`} />
+                  <circle cx="50" cy="45" r="3" fill="white" transform={`rotate(${gaugeRotation} 50 45)`} style={{ transformOrigin: "50px 45px" }} />
                 </svg>
               </div>
               <div className="mt-4">
-                <p className="text-6xl font-bold">{healthScore}<span className="text-2xl text-muted-foreground">/100</span></p>
-                <Badge variant="gold" className="mt-3 text-base px-4 py-1">
+                <p className="text-6xl font-bold">{health.overall_score}<span className="text-2xl text-muted-foreground">/100</span></p>
+                <Badge variant={health.overall_score >= 70 ? "success" : health.overall_score >= 40 ? "warning" : "danger"} className="mt-3 text-base px-4 py-1">
                   <Star className="h-4 w-4 mr-1" />
-                  {getScoreLabel(healthScore)}
+                  {health.grade}
                 </Badge>
-                <p className="text-muted-foreground mt-3 max-w-md">Your portfolio is well-structured with room for improvement</p>
+                <p className="text-muted-foreground mt-3 max-w-md">{health.grade_description}</p>
               </div>
             </div>
+
+            {health.summary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-border/50">
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Total Invested</p>
+                  <p className="text-lg font-bold">{formatCurrency(health.summary.total_invested)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Current Value</p>
+                  <p className="text-lg font-bold">{formatCurrency(health.summary.current_value)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Overall P&L</p>
+                  <p className={`text-lg font-bold ${health.summary.overall_pnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {formatCurrency(health.summary.overall_pnl)}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Total Returns</p>
+                  <p className={`text-lg font-bold ${health.summary.total_returns_pct >= 0 ? "text-green-500" : "text-red-500"}`}>
+                    {formatPercent(health.summary.total_returns_pct)}
+                  </p>
+                </div>
+              </div>
+            )}
           </Card>
         </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {scoreBreakdown.map((item) => (
-            <motion.div key={item.label} variants={fadeIn}>
-              <Card variant="glass" className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <item.icon className="h-5 w-5 text-primary" />
+          {health.categories.map((cat) => {
+            const Icon = CATEGORY_ICONS[cat.name] || Brain;
+            const color = CATEGORY_COLORS[cat.name] || "blue";
+            return (
+              <motion.div key={cat.name} variants={fadeIn}>
+                <Card variant="glass" className="p-5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-sm">{cat.name}</p>
+                      <p className={`text-2xl font-bold ${getScoreColor(cat.score)}`}>{cat.score}<span className="text-sm text-muted-foreground">/100</span></p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">{item.label}</p>
-                    <p className={`text-2xl font-bold ${getScoreColor(item.score)}`}>{item.score}<span className="text-sm text-muted-foreground">/100</span></p>
-                  </div>
-                </div>
-                <Progress value={item.score} max={100} size="md" color={item.color} showLabel={false} />
-                <p className="text-xs text-muted-foreground mt-3">{item.description}</p>
-              </Card>
-            </motion.div>
-          ))}
+                  <Progress value={cat.score} max={100} size="md" color={color as any} showLabel={false} />
+                  <p className="text-xs text-muted-foreground mt-3">{cat.description}</p>
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
 
         <motion.div variants={fadeIn}>
@@ -166,17 +250,22 @@ export default function AnalyticsPage() {
                   <p className="text-sm text-muted-foreground">Areas that need your attention</p>
                 </div>
               </div>
-              <Badge variant="danger">{issues.length}</Badge>
+              <Badge variant="danger">{health.issues.length}</Badge>
             </div>
             <div className="space-y-3">
-              {issues.map((issue, i) => (
-                <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-card/50 border hover:bg-card/80 transition-colors">
-                  <AlertTriangle className={`h-4 w-4 mt-0.5 shrink-0 ${
-                    issue.severity === "high" ? "text-red-500" : issue.severity === "medium" ? "text-amber-500" : "text-yellow-500"
-                  }`} />
-                  <p className="text-sm">{issue.text}</p>
-                </div>
-              ))}
+              {health.issues.map((issue, i) => {
+                const SeverityIcon = SEVERITY_ICON[issue.severity] || AlertTriangle;
+                return (
+                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-card/50 border hover:bg-card/80 transition-colors">
+                    <SeverityIcon className={`h-4 w-4 mt-0.5 shrink-0 ${SEVERITY_COLOR[issue.severity] || "text-muted-foreground"}`} />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{issue.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{issue.description}</p>
+                      <Badge variant="default" className="mt-1.5 text-[10px]">{issue.category}</Badge>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         </motion.div>
@@ -193,79 +282,40 @@ export default function AnalyticsPage() {
                   <p className="text-sm text-muted-foreground">Actionable steps to improve your score</p>
                 </div>
               </div>
-              <Badge variant="success">{recommendations.length}</Badge>
+              <Badge variant="success">{health.recommendations.length}</Badge>
             </div>
             <div className="space-y-3">
-              {recommendations.map((rec, i) => (
+              {health.recommendations.map((rec, i) => (
                 <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-card/50 border hover:bg-card/80 transition-colors group">
                   <ChevronRight className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
                   <div className="flex-1">
-                    <p className="text-sm">{rec.text}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium">{rec.title}</p>
+                      <Badge variant={PRIORITY_VARIANT[rec.priority] as any || "default"}>{rec.priority}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{rec.description}</p>
+                    <Badge variant="default" className="mt-1.5 text-[10px]">{rec.category}</Badge>
                   </div>
-                  <Badge variant={rec.tagVariant}>{rec.tag}</Badge>
                 </div>
               ))}
             </div>
           </Card>
         </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <motion.div variants={fadeIn}>
-            <Card variant="glass" className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <Activity className="h-5 w-5 text-blue-500" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Historical Health Trend</CardTitle>
-                  <p className="text-sm text-muted-foreground">Your score over the last 13 months</p>
-                </div>
+        <motion.div variants={fadeIn}>
+          <Card variant="glass" className="p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                <Brain className="h-5 w-5 text-blue-500" />
               </div>
-              <div className="flex items-end gap-1.5 h-40">
-                {monthlyScores.map((m, i) => (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground font-medium">{m.score}</span>
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: `${(m.score / 100) * 100}%` }}
-                      transition={{ delay: i * 0.05, duration: 0.4 }}
-                      className={`w-full rounded-t-sm ${
-                        m.score >= 70 ? "bg-green-500" : m.score >= 60 ? "bg-gold-400" : "bg-red-500"
-                      }`}
-                    />
-                    <span className="text-[9px] text-muted-foreground">{m.month}</span>
-                  </div>
-                ))}
+              <div>
+                <CardTitle className="text-lg">Historical Health Trend</CardTitle>
+                <p className="text-sm text-muted-foreground">Score trend over time</p>
               </div>
-            </Card>
-          </motion.div>
-
-          <motion.div variants={fadeIn}>
-            <Card variant="glass" className="p-6">
-              <div className="flex items-center gap-3 mb-5">
-                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <BarChart3 className="h-5 w-5 text-amber-500" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Portfolio Overlap Analysis</CardTitle>
-                  <p className="text-sm text-muted-foreground">Funds with significant holding overlap</p>
-                </div>
-              </div>
-              <div className="space-y-5">
-                {overlaps.map((ov, i) => (
-                  <div key={i}>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium">{ov.funds}</p>
-                      <Badge variant={ov.overlap > 35 ? "danger" : "warning"}>{ov.overlap}%</Badge>
-                    </div>
-                    <Progress value={ov.overlap} max={100} size="sm" color={ov.overlap > 35 ? "red" : "gold"} showLabel={false} />
-                    <p className="text-xs text-muted-foreground mt-1">{ov.description}</p>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </motion.div>
-        </div>
+            </div>
+            <p className="text-sm text-muted-foreground">Health score trend requires historical data. Check back after a few analysis runs.</p>
+          </Card>
+        </motion.div>
       </motion.div>
     </DashboardLayout>
   );

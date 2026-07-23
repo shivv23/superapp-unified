@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency, formatUSD, formatPercent } from "@/lib/utils";
+import { apiGetUSStocks, type Holding } from "@/lib/api";
 import {
   Globe,
   ArrowUpRight,
@@ -24,6 +25,8 @@ import {
   X,
   Info,
   ChevronDown,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 const fadeIn = {
@@ -39,60 +42,120 @@ const USD_INR_RATE = 83.42;
 type Sector = "All" | "Technology" | "Finance" | "Healthcare" | "Consumer";
 const SECTORS: Sector[] = ["All", "Technology", "Finance", "Healthcare", "Consumer"];
 
-interface Stock {
-  ticker: string;
-  name: string;
-  sector: Sector;
-  priceUSD: number;
-  qty: number;
-  investedUSD: number;
-  color: string;
+const TICKER_COLORS: Record<string, string> = {
+  AAPL: "#555",
+  MSFT: "#00A4EF",
+  GOOGL: "#4285F4",
+  AMZN: "#FF9900",
+  NVDA: "#76B900",
+  TSLA: "#CC0000",
+  META: "#1877F2",
+  JPM: "#003D6B",
+};
+
+const SECTOR_MAP: Record<string, Sector> = {
+  AAPL: "Technology",
+  MSFT: "Technology",
+  GOOGL: "Technology",
+  AMZN: "Consumer",
+  NVDA: "Technology",
+  TSLA: "Consumer",
+  META: "Technology",
+  JPM: "Finance",
+};
+
+function getTickerColor(symbol: string): string {
+  return TICKER_COLORS[symbol] || "#666";
 }
 
-const STOCKS: Stock[] = [
-  { ticker: "AAPL", name: "Apple Inc", sector: "Technology", priceUSD: 189.84, qty: 15.0, investedUSD: 2550.0, color: "#6366f1" },
-  { ticker: "MSFT", name: "Microsoft Corp", sector: "Technology", priceUSD: 422.86, qty: 8.0, investedUSD: 3100.0, color: "#3b82f6" },
-  { ticker: "GOOGL", name: "Alphabet Inc", sector: "Technology", priceUSD: 176.33, qty: 12.0, investedUSD: 1800.0, color: "#22c55e" },
-  { ticker: "AMZN", name: "Amazon.com Inc", sector: "Consumer", priceUSD: 186.27, qty: 10.0, investedUSD: 1650.0, color: "#f59e0b" },
-  { ticker: "NVDA", name: "NVIDIA Corp", sector: "Technology", priceUSD: 131.29, qty: 20.0, investedUSD: 1900.0, color: "#10b981" },
-  { ticker: "TSLA", name: "Tesla Inc", sector: "Consumer", priceUSD: 248.42, qty: 5.0, investedUSD: 1100.0, color: "#ef4444" },
-  { ticker: "META", name: "Meta Platforms Inc", sector: "Technology", priceUSD: 503.28, qty: 4.0, investedUSD: 1850.0, color: "#8b5cf6" },
-  { ticker: "JPM", name: "JPMorgan Chase", sector: "Finance", priceUSD: 200.0, qty: 6.0, investedUSD: 1100.0, color: "#ec4899" },
-];
+function getSectorForSymbol(symbol: string): Sector {
+  return SECTOR_MAP[symbol] || "Technology";
+}
 
 export default function USStocksPage() {
+  const [data, setData] = useState<Holding[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Sector>("All");
   const [buyDialogOpen, setBuyDialogOpen] = useState(false);
-  const [selectedStock, setSelectedStock] = useState<Stock>(STOCKS[0]);
+  const [selectedStock, setSelectedStock] = useState<Holding | null>(null);
   const [amountINR, setAmountINR] = useState<string>("1000");
   const [stockDropdownOpen, setStockDropdownOpen] = useState(false);
   const [exchangeRefreshing, setExchangeRefreshing] = useState(false);
 
-  const filteredStocks =
-    activeTab === "All" ? STOCKS : STOCKS.filter((s) => s.sector === activeTab);
+  useEffect(() => {
+    async function fetchStocks() {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await apiGetUSStocks();
+        setData(res.data);
+        if (res.data.length > 0) {
+          setSelectedStock(res.data[0]);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to fetch US stocks data");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStocks();
+  }, []);
 
-  const totalInvested = STOCKS.reduce((acc, s) => acc + s.investedUSD, 0);
-  const totalCurrentValue = STOCKS.reduce((acc, s) => acc + s.priceUSD * s.qty, 0);
-  const totalChangeUSD = totalCurrentValue - totalInvested;
-  const totalChangePct = (totalChangeUSD / totalInvested) * 100;
+  const filteredStocks = useMemo(() => {
+    if (activeTab === "All") return data;
+    return data.filter((s) => getSectorForSymbol(s.symbol) === activeTab);
+  }, [data, activeTab]);
+
+  const totalInvested = useMemo(() => data.reduce((acc, s) => acc + s.invested_value, 0), [data]);
+
+  const totalCurrentValue = useMemo(() => data.reduce((acc, s) => acc + s.current_value, 0), [data]);
+
+  const todayChange = useMemo(
+    () => data.reduce((acc, s) => acc + (s.day_change_pct / 100) * s.current_value, 0),
+    [data]
+  );
+  const todayChangePct = totalCurrentValue > 0 ? (todayChange / totalCurrentValue) * 100 : 0;
+
   const availableBalance = 500.0;
 
   const parsedAmount = parseFloat(amountINR) || 0;
   const amountUSD = parsedAmount / USD_INR_RATE;
-  const sharesPreview = selectedStock ? amountUSD / selectedStock.priceUSD : 0;
+  const sharesPreview = selectedStock ? amountUSD / selectedStock.ltp : 0;
 
   function handleRefresh() {
     setExchangeRefreshing(true);
     setTimeout(() => setExchangeRefreshing(false), 800);
   }
 
-  function getStockPL(stock: Stock) {
-    const current = stock.priceUSD * stock.qty;
-    return current - stock.investedUSD;
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <Loader2 className="h-10 w-10 text-blue-400 animate-spin" />
+          <p className="text-white/50 text-sm">Loading US stocks...</p>
+        </div>
+      </DashboardLayout>
+    );
   }
 
-  function getStockReturn(stock: Stock) {
-    return ((stock.priceUSD * stock.qty - stock.investedUSD) / stock.investedUSD) * 100;
+  if (error) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <div className="h-16 w-16 rounded-full bg-red-500/15 flex items-center justify-center">
+            <AlertCircle className="h-8 w-8 text-red-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-white font-medium mb-1">Failed to load stocks</p>
+            <p className="text-white/40 text-sm">{error}</p>
+          </div>
+          <Button variant="primary" size="md" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return (
@@ -145,8 +208,12 @@ export default function USStocksPage() {
               </div>
               <div>
                 <p className="text-xs text-white/40">Today&apos;s Change</p>
-                <p className="text-lg font-bold text-emerald-400">{formatUSD(totalChangeUSD)}</p>
-                <p className="text-xs text-emerald-400">{formatPercent(totalChangePct)}</p>
+                <p className={`text-lg font-bold ${todayChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {formatUSD(todayChange)}
+                </p>
+                <p className={`text-xs ${todayChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                  {formatPercent(todayChangePct)}
+                </p>
               </div>
             </div>
           </Card>
@@ -158,8 +225,10 @@ export default function USStocksPage() {
               </div>
               <div>
                 <p className="text-xs text-white/40">Holdings Count</p>
-                <p className="text-lg font-bold text-white">{STOCKS.length} stocks</p>
-                <p className="text-xs text-white/40">Across {new Set(STOCKS.map((s) => s.sector)).size} sectors</p>
+                <p className="text-lg font-bold text-white">{data.length} stocks</p>
+                <p className="text-xs text-white/40">
+                  Across {new Set(data.map((s) => getSectorForSymbol(s.symbol))).size} sectors
+                </p>
               </div>
             </div>
           </Card>
@@ -224,13 +293,10 @@ export default function USStocksPage() {
                 <tbody>
                   <AnimatePresence>
                     {filteredStocks.map((stock) => {
-                      const currentValue = stock.priceUSD * stock.qty;
-                      const pl = getStockPL(stock);
-                      const ret = getStockReturn(stock);
-                      const isPositive = pl >= 0;
+                      const isPositive = stock.pnl >= 0;
                       return (
                         <motion.tr
-                          key={stock.ticker}
+                          key={stock.symbol}
                           initial={{ opacity: 0, x: -10 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: 10 }}
@@ -240,34 +306,34 @@ export default function USStocksPage() {
                             <div className="flex items-center gap-3">
                               <div
                                 className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0"
-                                style={{ backgroundColor: stock.color }}
+                                style={{ backgroundColor: getTickerColor(stock.symbol) }}
                               >
-                                {stock.ticker[0]}
+                                {stock.symbol[0]}
                               </div>
                               <div>
-                                <p className="text-white font-medium">{stock.ticker}</p>
+                                <p className="text-white font-medium">{stock.symbol}</p>
                                 <p className="text-white/40 text-xs">{stock.name}</p>
                               </div>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right text-white font-mono">
-                            {formatUSD(stock.priceUSD)}
+                            {formatUSD(stock.ltp)}
                           </td>
                           <td className="px-4 py-3 text-right text-white/70 font-mono text-xs">
-                            {formatCurrency(stock.priceUSD * USD_INR_RATE)}
+                            {formatCurrency(stock.ltp * USD_INR_RATE)}
                           </td>
                           <td className="px-4 py-3 text-right text-white font-mono">
-                            {stock.qty.toFixed(3)}
+                            {stock.quantity.toFixed(3)}
                           </td>
                           <td className="px-4 py-3 text-right text-white/70 font-mono text-xs">
-                            {formatUSD(stock.investedUSD)}
+                            {formatUSD(stock.invested_value)}
                           </td>
                           <td className="px-4 py-3 text-right text-white font-mono">
-                            {formatUSD(currentValue)}
+                            {formatUSD(stock.current_value)}
                           </td>
                           <td className={`px-4 py-3 text-right font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
                             {isPositive ? "+" : ""}
-                            {formatUSD(pl)}
+                            {formatUSD(stock.pnl)}
                           </td>
                           <td className="px-4 py-3 text-right">
                             <span className={`inline-flex items-center gap-1 font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
@@ -276,7 +342,7 @@ export default function USStocksPage() {
                               ) : (
                                 <ArrowDown className="h-3 w-3" />
                               )}
-                              {formatPercent(ret)}
+                              {formatPercent(stock.returns_pct)}
                             </span>
                           </td>
                         </motion.tr>
@@ -294,11 +360,11 @@ export default function USStocksPage() {
           <Card variant="glass" className="p-5">
             <CardTitle className="text-white text-base mb-4">Portfolio Allocation</CardTitle>
             <div className="grid gap-3">
-              {STOCKS.map((stock) => {
-                const weight = ((stock.priceUSD * stock.qty) / totalCurrentValue) * 100;
+              {data.map((stock) => {
+                const weight = totalCurrentValue > 0 ? (stock.current_value / totalCurrentValue) * 100 : 0;
                 return (
-                  <div key={stock.ticker} className="flex items-center gap-3">
-                    <div className="w-20 text-xs text-white/60 font-mono">{stock.ticker}</div>
+                  <div key={stock.symbol} className="flex items-center gap-3">
+                    <div className="w-20 text-xs text-white/60 font-mono">{stock.symbol}</div>
                     <div className="flex-1">
                       <Progress value={weight} max={100} size="sm" color="blue" showLabel />
                     </div>
@@ -312,7 +378,7 @@ export default function USStocksPage() {
 
       {/* Buy Fractional Shares Dialog */}
       <AnimatePresence>
-        {buyDialogOpen && (
+        {buyDialogOpen && selectedStock && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -355,12 +421,12 @@ export default function USStocksPage() {
                         <div className="flex items-center gap-3">
                           <div
                             className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-                            style={{ backgroundColor: selectedStock.color }}
+                            style={{ backgroundColor: getTickerColor(selectedStock.symbol) }}
                           >
-                            {selectedStock.ticker[0]}
+                            {selectedStock.symbol[0]}
                           </div>
                           <div>
-                            <p className="text-white font-medium text-sm">{selectedStock.ticker}</p>
+                            <p className="text-white font-medium text-sm">{selectedStock.symbol}</p>
                             <p className="text-white/40 text-xs">{selectedStock.name}</p>
                           </div>
                         </div>
@@ -375,28 +441,28 @@ export default function USStocksPage() {
                             exit={{ opacity: 0, y: -5 }}
                             className="absolute z-10 top-full mt-1 w-full rounded-xl bg-[#0f1729] border border-white/10 shadow-xl overflow-hidden"
                           >
-                            {STOCKS.map((stock) => (
+                            {data.map((stock) => (
                               <button
-                                key={stock.ticker}
+                                key={stock.symbol}
                                 onClick={() => {
                                   setSelectedStock(stock);
                                   setStockDropdownOpen(false);
                                 }}
                                 className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left ${
-                                  selectedStock.ticker === stock.ticker ? "bg-white/5" : ""
+                                  selectedStock.symbol === stock.symbol ? "bg-white/5" : ""
                                 }`}
                               >
                                 <div
                                   className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                                  style={{ backgroundColor: stock.color }}
+                                  style={{ backgroundColor: getTickerColor(stock.symbol) }}
                                 >
-                                  {stock.ticker[0]}
+                                  {stock.symbol[0]}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-white text-sm font-medium">{stock.ticker}</p>
+                                  <p className="text-white text-sm font-medium">{stock.symbol}</p>
                                   <p className="text-white/40 text-xs truncate">{stock.name}</p>
                                 </div>
-                                <span className="text-white/50 text-xs font-mono">{formatUSD(stock.priceUSD)}</span>
+                                <span className="text-white/50 text-xs font-mono">{formatUSD(stock.ltp)}</span>
                               </button>
                             ))}
                           </motion.div>
@@ -450,7 +516,7 @@ export default function USStocksPage() {
                     <p className="text-xs text-blue-400 font-medium uppercase tracking-wider mb-3">Preview Order</p>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/50">Stock</span>
-                      <span className="text-white font-medium">{selectedStock.ticker}</span>
+                      <span className="text-white font-medium">{selectedStock.symbol}</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/50">Shares</span>
@@ -458,7 +524,7 @@ export default function USStocksPage() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-white/50">Price</span>
-                      <span className="text-white font-mono">{formatUSD(selectedStock.priceUSD)}</span>
+                      <span className="text-white font-mono">{formatUSD(selectedStock.ltp)}</span>
                     </div>
                     <div className="h-px bg-white/5 my-1" />
                     <div className="flex justify-between text-sm font-bold">

@@ -41,6 +41,10 @@ func main() {
 		r.Get("/portfolio/performance", h.Performance)
 		r.Get("/portfolio/transactions", h.Transactions)
 		r.Get("/portfolio/risk-profile", h.RiskProfile)
+		r.Get("/portfolio/tax-analysis", h.TaxAnalysis)
+		r.Get("/portfolio/health-score", h.HealthScore)
+		r.Get("/portfolio/us-stocks", h.USStocks)
+		r.Get("/portfolio/options-chain", h.OptionsChain)
 	})
 
 	srv := &http.Server{
@@ -64,6 +68,10 @@ func main() {
 		fmt.Printf("  GET  /api/v1/portfolio/performance\n")
 		fmt.Printf("  GET  /api/v1/portfolio/transactions\n")
 		fmt.Printf("  GET  /api/v1/portfolio/risk-profile\n")
+		fmt.Printf("  GET  /api/v1/portfolio/tax-analysis\n")
+		fmt.Printf("  GET  /api/v1/portfolio/health-score\n")
+		fmt.Printf("  GET  /api/v1/portfolio/us-stocks\n")
+		fmt.Printf("  GET  /api/v1/portfolio/options-chain\n")
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}

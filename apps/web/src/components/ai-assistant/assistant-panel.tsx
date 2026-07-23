@@ -70,7 +70,7 @@ const welcomeMessage: Message = {
   }),
 };
 
-function generateResponse(userMessage: string, holdings: Holding[], summary: PortfolioSummary | null): string {
+async function generateResponse(userMessage: string, holdings: Holding[], summary: PortfolioSummary | null): Promise<string> {
   const msg = userMessage.toLowerCase();
 
   if (msg.includes("portfolio") || msg.includes("holdings") || msg.includes("invested") || msg.includes("how") && msg.includes("my")) {
@@ -188,11 +188,37 @@ function generateResponse(userMessage: string, holdings: Holding[], summary: Por
   }
 
   if (msg.includes("market") || msg.includes("nifty") || msg.includes("sensex") || msg.includes("crash") || msg.includes("rally")) {
-    return `📈 **Market Overview**\n\n**NIFTY 50:** ₹24,650.50 (+0.64%)\n**SENSEX:** ₹81,245.30 (+0.58%)\n**India VIX:** 13.42 (Low volatility)\n\n**Key Themes Today:**\n• IT sector leading with +1.2% on strong TCS results\n• Banking stocks steady ahead of RBI policy meet\n• Global cues positive as US markets closed higher\n• FII inflows continue for 5th consecutive session\n\n💡 **Historical Insight:** When NIFTY drops >5% in a month, it has recovered 100% of the time within 6 months. Stay invested through volatility.`;
+    try {
+      const res = await fetch("http://localhost:8002/api/v1/portfolio/options-chain?underlying=NIFTY");
+      const data = await res.json();
+      const chain = data.data;
+      const spot = chain.spot_price;
+      const change = chain.day_change;
+      const changePct = chain.day_change_pct;
+      const arrow = change >= 0 ? "🟢" : "🔴";
+      const sign = change >= 0 ? "+" : "";
+      let response = `📈 **Market Overview**\n\n`;
+      response += `${arrow} **NIFTY 50:** ₹${spot.toFixed(2)} (${sign}${changePct.toFixed(2)}%)\n`;
+      response += `**Day Change:** ${sign}₹${Math.abs(change).toFixed(2)}\n\n`;
+      response += `**Key Themes Today:**\n`;
+      if (change >= 0) {
+        response += `• Markets trading higher — positive momentum continues\n`;
+        response += `• Watch for breakout above resistance levels\n`;
+      } else {
+        response += `• Markets under pressure — potential buying opportunity\n`;
+        response += `• Check support levels for accumulation zones\n`;
+      }
+      response += `• Check sectoral indices for rotation opportunities\n`;
+      response += `• Track FII/DII flows for institutional sentiment\n\n`;
+      response += `💡 **Historical Insight:** When NIFTY drops >5% in a month, it has recovered 100% of the time within 6 months. Stay invested through volatility.`;
+      return response;
+    } catch {
+      return `📈 **Market Overview**\n\nI couldn't fetch live market data right now. The portfolio service may be down.\n\nPlease check the **Dashboard** page for live NIFTY/SENSEX prices, or try again in a moment.`;
+    }
   }
 
   if (msg.includes("us") || msg.includes("america") || msg.includes("apple") || msg.includes("nvidia") || msg.includes("fractional")) {
-    return `🌍 **US Stocks & Fractional Investing**\n\nYou can invest in US stocks starting from just ₹100 through fractional shares!\n\n**Popular Picks:**\n• 🍎 **Apple (AAPL)** — $189.84 — The world's most valuable company\n• 🤖 **NVIDIA (NVDA)** — $131.29 — AI chip leader, +170% YTD\n• 💻 **Microsoft (MSFT)** — $422.86 — Cloud + AI powerhouse\n• 🛒 **Amazon (AMZN)** — $186.27 — E-commerce + AWS cloud\n\n**Benefits:**\n• Diversify beyond Indian markets\n• hedge against INR depreciation\n• Access to global innovation leaders\n• Start with as little as ₹100\n\n**Tax Note:** US stock gains are taxed as per your income slab. DTAA treaty prevents double taxation.\n\nVisit the **US Stocks** section in the sidebar to start investing!`;
+    return `🌍 **US Stocks & Fractional Investing**\n\nYou can invest in US stocks starting from just ₹100 through fractional shares!\n\n**Popular Picks:**\n• 🍎 **Apple (AAPL)** — $189.84 — The world's most valuable company\n• 🤖 **NVIDIA (NVDA)** — $131.29 — AI chip leader, +170% YTD\n• 💻 **Microsoft (MSFT)** — $422.86 — Cloud + AI powerhouse\n• 🛒 **Amazon (AMZN)** — $186.27 — E-commerce + AWS cloud\n\n**Benefits:**\n• Diversify beyond Indian markets\n• hedge against INR depreciation\n• Access to global innovation leaders\n• Start with as little as ₹100\n\n**Tax Note:** US stock gains are taxed as per your income slab. DTAA treaty prevents double taxation.\n\nVisit the **US Stocks** page in the sidebar to see live prices and start investing!`;
   }
 
   if (msg.includes("hello") || msg.includes("hi") || msg.includes("hey") || msg.includes("help")) {
@@ -315,9 +341,9 @@ export function AssistantPanel({ isOpen, onClose }: AssistantPanelProps) {
 
   const simulateAIResponse = (userMessage: string) => {
     setIsTyping(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsTyping(false);
-      const response = generateResponse(userMessage, holdings, summary);
+      const response = await generateResponse(userMessage, holdings, summary);
       addMessage(response, false);
     }, 800 + Math.random() * 700);
   };

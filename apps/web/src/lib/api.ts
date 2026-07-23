@@ -288,23 +288,23 @@ export interface CategoryCount {
 
 export async function apiGetProducts(params?: Record<string, string>) {
   const qs = params ? "?" + new URLSearchParams(params).toString() : "";
-  return apiFetch(`${MARKETPLACE_BASE}/api/v1/marketplace/products${qs}`) as Promise<MarketplaceResponse>;
+  return apiFetch(`${MARKETPLACE_BASE}/api/v1/products${qs}`) as Promise<MarketplaceResponse>;
 }
 
 export async function apiGetProduct(id: string) {
-  return apiFetch(`${MARKETPLACE_BASE}/api/v1/marketplace/products/${id}`) as Promise<{ success: boolean; data: MarketProduct }>;
+  return apiFetch(`${MARKETPLACE_BASE}/api/v1/products/${id}`) as Promise<{ success: boolean; data: MarketProduct }>;
 }
 
 export async function apiGetCategories() {
-  return apiFetch(`${MARKETPLACE_BASE}/api/v1/marketplace/categories`) as Promise<{ success: boolean; data: CategoryCount[] }>;
+  return apiFetch(`${MARKETPLACE_BASE}/api/v1/categories`) as Promise<{ success: boolean; data: CategoryCount[] }>;
 }
 
 export async function apiGetFeatured() {
-  return apiFetch(`${MARKETPLACE_BASE}/api/v1/marketplace/featured`) as Promise<{ success: boolean; data: MarketProduct[] }>;
+  return apiFetch(`${MARKETPLACE_BASE}/api/v1/featured`) as Promise<{ success: boolean; data: MarketProduct[] }>;
 }
 
 export async function apiCreateOrder(productId: string, quantity: number, orderType: string, userId: string) {
-  return apiFetch(`${MARKETPLACE_BASE}/api/v1/marketplace/orders`, {
+  return apiFetch(`${MARKETPLACE_BASE}/api/v1/orders`, {
     method: "POST",
     body: JSON.stringify({ product_id: productId, quantity, order_type: orderType, user_id: userId }),
   }) as Promise<{ success: boolean; data: { id: string; status: string; total_amount: number } }>;
@@ -408,4 +408,116 @@ export async function apiPortfolioOptimize(currentHoldings: { symbol: string; ty
     method: "POST",
     body: JSON.stringify({ current_holdings: currentHoldings, risk_profile: riskProfile }),
   }) as Promise<{ status: string; data: { suggested_allocation: unknown[]; recommendations: unknown[]; rebalancing_actions: unknown[] } }>;
+}
+
+// --- Tax Analysis ---
+export interface TaxHolding {
+  id: string;
+  symbol: string;
+  name: string;
+  type: string;
+  buy_price: number;
+  current_price: number;
+  quantity: number;
+  loss_amount: number;
+  tax_saving: number;
+  holding_period: string;
+}
+
+export interface TaxAnalysis {
+  total_ltcg: number;
+  total_stcg: number;
+  ltcg_exempted: number;
+  ltcg_exemption_used: number;
+  ltcg_exemption_remaining: number;
+  stcg_tax_rate: number;
+  ltcg_tax_rate: number;
+  harvestable_losses: TaxHolding[];
+  total_harvestable_loss: number;
+  estimated_tax_saving: number;
+  estimated_tax_liability: number;
+  tax_saved_this_year: number;
+}
+
+export async function apiGetTaxAnalysis() {
+  return apiFetch(`${PORTFOLIO_BASE}/api/v1/portfolio/tax-analysis`) as Promise<{ status: string; data: TaxAnalysis }>;
+}
+
+// --- Portfolio Health ---
+export interface HealthCategory {
+  name: string;
+  score: number;
+  description: string;
+}
+
+export interface HealthIssue {
+  severity: string;
+  category: string;
+  title: string;
+  description: string;
+}
+
+export interface HealthRecommendation {
+  title: string;
+  category: string;
+  priority: string;
+  description: string;
+}
+
+export interface PortfolioHealth {
+  overall_score: number;
+  grade: string;
+  grade_description: string;
+  categories: HealthCategory[];
+  issues: HealthIssue[];
+  recommendations: HealthRecommendation[];
+  summary: PortfolioSummary;
+}
+
+export async function apiGetHealthScore() {
+  return apiFetch(`${PORTFOLIO_BASE}/api/v1/portfolio/health-score`) as Promise<{ status: string; data: PortfolioHealth }>;
+}
+
+// --- US Stocks ---
+export async function apiGetUSStocks() {
+  return apiFetch(`${PORTFOLIO_BASE}/api/v1/portfolio/us-stocks`) as Promise<{ status: string; data: Holding[] }>;
+}
+
+// --- Options Chain ---
+export interface OptionsGreeks {
+  delta: number;
+  gamma: number;
+  theta: number;
+  vega: number;
+  rho: number;
+}
+
+export interface OptionsStrike {
+  strike: number;
+  is_atm: boolean;
+  call_oi: number;
+  call_chg_oi: number;
+  call_iv: number;
+  call_ltp: number;
+  put_ltp: number;
+  put_iv: number;
+  put_chg_oi: number;
+  put_oi: number;
+  call_greeks: OptionsGreeks;
+  put_greeks: OptionsGreeks;
+}
+
+export interface OptionsChain {
+  underlying: string;
+  spot_price: number;
+  day_change: number;
+  day_change_pct: number;
+  expiry: string;
+  strikes: OptionsStrike[];
+}
+
+export async function apiGetOptionsChain(underlying = "NIFTY", spot?: number) {
+  const params = new URLSearchParams({ underlying });
+  if (spot) params.set("spot", String(spot));
+  return apiFetch(`${PORTFOLIO_BASE}/api/v1/portfolio/options-chain?${params}`) as Promise<{ status: string; data: OptionsChain }>;
 }

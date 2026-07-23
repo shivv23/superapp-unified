@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -193,6 +194,37 @@ func (h *Handler) RiskProfile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, successResponse(profile))
 }
 
+func (h *Handler) TaxAnalysis(w http.ResponseWriter, r *http.Request) {
+	analysis := h.store.GetTaxAnalysis()
+	writeJSON(w, http.StatusOK, successResponse(analysis))
+}
+
+func (h *Handler) HealthScore(w http.ResponseWriter, r *http.Request) {
+	health := h.store.GetHealthScore()
+	writeJSON(w, http.StatusOK, successResponse(health))
+}
+
+func (h *Handler) USStocks(w http.ResponseWriter, r *http.Request) {
+	usStocks := h.store.GetUSStocks()
+	writeJSON(w, http.StatusOK, successResponse(usStocks))
+}
+
+func (h *Handler) OptionsChain(w http.ResponseWriter, r *http.Request) {
+	underlying := r.URL.Query().Get("underlying")
+	if underlying == "" {
+		underlying = "NIFTY"
+	}
+
+	spotStr := r.URL.Query().Get("spot")
+	spot := 24650.0
+	if s, err := strconv.ParseFloat(spotStr, 64); err == nil && s > 0 {
+		spot = s
+	}
+
+	chain := h.store.GetOptionsChain(underlying, spot)
+	writeJSON(w, http.StatusOK, successResponse(chain))
+}
+
 func (h *Handler) computeConcentration(holdings []model.Holding, total float64) float64 {
 	if total == 0 {
 		return 0
@@ -303,5 +335,4 @@ func writeLog(level, msg string) {
 	}
 	logLine, _ := json.Marshal(entry)
 	_ = logLine
-	// Structured log output - in production this would go to a log aggregator
 }
