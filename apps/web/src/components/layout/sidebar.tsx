@@ -19,6 +19,9 @@ import {
   Receipt,
   Rocket,
   LogOut,
+  Globe,
+  TrendingDown,
+  Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
@@ -33,13 +36,15 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: <LayoutDashboard size={20} /> },
   { label: "Portfolio", href: "/dashboard/portfolio", icon: <Briefcase size={20} /> },
+  { label: "US Stocks", href: "/dashboard/us-stocks", icon: <Globe size={20} /> },
   { label: "Analytics", href: "/dashboard/analytics", icon: <BarChart3 size={20} /> },
-  { label: "Marketplace", href: "/dashboard/marketplace", icon: <ShoppingBag size={20} /> },
   { label: "IPO Tracker", href: "/dashboard/ipos", icon: <Rocket size={20} /> },
+  { label: "F&O Trading", href: "/dashboard/fo-trading", icon: <TrendingDown size={20} /> },
   { label: "Advisory", href: "/dashboard/advisory", icon: <BrainCircuit size={20} />, badge: 3 },
+  { label: "Tax Optimizer", href: "/dashboard/tax-optimizer", icon: <Receipt size={20} /> },
+  { label: "Linked Accounts", href: "/dashboard/linked-accounts", icon: <Link2 size={20} /> },
   { label: "Gamification", href: "/dashboard/gamification", icon: <Trophy size={20} /> },
   { label: "Literacy", href: "/dashboard/literacy", icon: <BookOpen size={20} /> },
-  { label: "Tax Optimizer", href: "/dashboard/tax-optimizer", icon: <Receipt size={20} /> },
   { label: "Settings", href: "/dashboard/settings", icon: <Settings size={20} /> },
 ];
 
@@ -75,7 +80,7 @@ export function Sidebar() {
         </Link>
       </div>
 
-      <nav className="flex-1 py-4 px-3 space-y-1">
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto scrollbar-hide">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||

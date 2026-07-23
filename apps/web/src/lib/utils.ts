@@ -24,3 +24,11 @@ export function formatPercent(value: number): string {
   const prefix = value >= 0 ? "+" : "";
   return `${prefix}${value.toFixed(2)}%`;
 }
+
+export function formatUSD(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
